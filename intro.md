@@ -136,6 +136,6 @@ Ref:
 
 ## 6: App integration
 Integrate model to the application:
-- host model in a serving serviceand change the app logic to send model prediction requestes using the service
+- host model in a serving service and change the app logic to send model prediction requestes using the service
 - evalute metrics important to app like: clickthru rate, churn rate i.e prod metric evaluation (not ML-specific metrics like good precision-recall)
 
