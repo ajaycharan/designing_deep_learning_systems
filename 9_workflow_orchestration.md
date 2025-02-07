@@ -162,5 +162,38 @@ Critical: How easy it is to convert the proto code to WF, if we don't have to tf
 WF sgould be computationally light! not do heavy computations, the real work should be done by tasks
 
 ## 9.2.3 Orch sys: Genral design
+### 5 components
+1. web servers: UIs and APIs to create, inspect, trigger and debug behvior of WF
+2. scheduler & controller: do 2 things
+    - Scheduler watches every active WF in system and schedules WF to run at right time
+    - Controller dispatches WF tasks to workers
+3. metadata DB: stores WF's config, DAG, editing and exec history and the WF tasks' exec state
+4. worker group: provide compute resources to run WF tasks. Abstract away the infra and is agnostic to the running task. Eg:
+    - different workers like kubernetes worker, amazon elastic compute cloud (EC2) worker but they can all exec the same task but on different infra
+5. object store: shared file storage for all other componenets; usually built on top of cloud object storage like amazon simple storag service (S3). use:
+    - task output sharing: worker1 runs task1 and reads output val of the previous task i.e. task0 from the obj store as task1's input, then the worker1 also saves the task1 output to obj store for successor task task2
 
+Obj store and metadata DB are accessible to all compoenents of orch sys. 
+*benefit of centralized store* it de-couples core components so the web server, scheduler, and workes can work independently.
 
+### How is WF exec?
+1. define DAG for WF:
+    - set of tasks
+    - control flow of task exec sequence
+    - for each task
+        - use either systems default operator like shell or python
+        - or build own operator to exec the task
+2. submit the WF: DAG + dependent code to `web server` via UI or CLI.
+    - WF saved in `metadata DB`
+3. `scheduler` periodically scans the metadata DB & detects new WF
+    - kicks off the WF at the scheduled time
+    - by callin `controller` to
+        - dispatch WF's tasks to worker queue (based on task seq in DAG)
+4. a `worker` picks up a task from the sahred job queue
+    - reads task definition from `metadata DB`
+    - execs task by running the task operator
+    - saves task output value to `obj store`
+    - reports task exec status back to `metadata DB`
+Meanwhile the engr can use the UI hosted on `web server` to monitor WF exec. Since both, the scheduler/controller and the workers report the status to `metadata DB` in realtime.
+
+## 9.2.3 WFO design princiles
