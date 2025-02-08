@@ -197,3 +197,10 @@ Obj store and metadata DB are accessible to all compoenents of orch sys.
 Meanwhile the engr can use the UI hosted on `web server` to monitor WF exec. Since both, the scheduler/controller and the workers report the status to `metadata DB` in realtime.
 
 ## 9.2.3 WFO design princiles
+1. criticality
+2. usability
+3. extensibility
+4. isolation
+5. scaling
+### criticality
+a valid WF should should always be exec correctly, repeatedly and on schedule
