@@ -202,5 +202,150 @@ Meanwhile the engr can use the UI hosted on `web server` to monitor WF exec. Sin
 3. extensibility
 4. isolation
 5. scaling
-### criticality
+### 1. criticality
 a valid WF should should always be exec correctly, repeatedly and on schedule
+### 2. usability 
+Should enchance productivity of the DS: their interactions would be WF creation, testing and monitoring. So it should be user frinedly to allow them to do this easily
+### 3. extensibility
+Need to cater to a variety of DL infra. So it should abstract away whether I'm using EC2 or Kubernetes and end use shouldn't worry about where thier operators or tasks are deployed to
+### 4. isolation
+2 types:
+- crreation isolation
+    - if I create a wrong DAG or relase a new version of a lib/module that is used in other WFs, they shouldn't be affected
+- execution isolation
+    - each WF runs in isolated env: 
+        - no resource competition
+        - failure of WF A shan't affect WF B
+### 5. Scaling
+Addresses 2 scaling porblems:
+- Many concurrent WFs
+    - adding more wotkers to the worker group can handle more concurrent WFs. Given enough resources, it should handle infinit WFs
+    - Always keep the SLA (service level agreemeent) for each WF eg: WF A is executed no less than 2 sec after its scheduled time 
+- Larg, expansive WFs
+    - User shan't worry about performance (so can focus on readable, easy code, easy operations)
+    - When the WF exec hits a bottleneck like training ops taking too long, etc, then the Orch sys should be able to  provide horizontal resources like parallelism, distributed training to fix the single WF performance issue
+### 6. human centric
+Resapect that DL is iterative, ongoing work from proto to prod. So, make effort to help ease the conversion from proto to prod as semalessy as can
+
+## 9.3 Open source WFOs
+3 opensource: Airflow, Argo, Metaflow. To do some comparison, implement the same WF in all three: New Data -> Tfm data -> save to new table in DB -> notify the DS. The WF should run daily.
+## 9.3.1 Airflow
+Created at AirBnB in 2014. Now part of Apache. The most adopted Orch Sys.
+- Write code to author, schedule and monitor WFs
+- Not designed for DL. Orignally designed for complex ETL pipelines
+- But still used in DL because:
+    - extensible
+    - prod quality
+    - GUI support
+### Build WF for Typical use case
+2 steps:
+- Define WF DAG and tasks
+- Declare task dependencies in DAG
+
+The DAG is python code
+```python
+# declare WF DAG
+with DAG(dag_id="dp_dag",
+        schedule_interval="@daily,
+        deafult_args=default_args,
+        template_searchpath= [f"{os.envrion['AIRFLOW_HOME']}"],
+        catchup=False
+        ) as dag:
+    # define tasks of WF, below: each code section is a task
+    # check if new files arrived
+    is_new_data_ready = FileSensor(
+        task_id="is_new_data_ready",
+        fs_conn_id="data_path",
+        filepath="data.csv",
+        ...
+    )
+    # define data tf task
+    # the actual logi implemented in tf_data function
+    tfm_data = Pythonoperator(
+        task_id="tfm_data",
+        python_callable=tf_data
+    )
+    # def table creation task
+    # PostgresOperator is predefined airflow operator to interact with Postgres DB
+    make_table = PostgresOperator(
+        task_id="make_table",
+        sql='''CREATE TABLE IF NOT EXISTS invoices (
+                .. .. ..
+                );''',
+        postgres_conn_id='postgres',
+        database='customed_data'
+    )
+    # def savin task
+    save_db = PythonOperator(
+        task_id='save_db',
+        python_callable=store_in_db
+    )
+    # def notification task
+    notify_ds = SlackWebhookOperator(
+        task_id='notify_ds',
+        http_conn_id='slcak_conn',
+        webhook_token=slack_token,
+        message="DS notification\n"
+        ...
+    )
+# Declare Task dependencies
+is_new_data_ready >> tfm_data
+tfm_data >> make_table >> save_db
+save_db >> notify_ds
+save_db >> make_report
+
+# The actual Data TFM logic, etc that is ref in tasks
+def tf_data(*args, **kwargs):
+    ...
+
+def store_in_db(*args, **kwargs):
+    ...
+```
+- Each task is implemented as an operator
+    - Many predefined: MySQLOperator, SimpleHttpOperator, Docker, etc
+    - They help implement task w/o coding
+    - Can use `PytohnOperator` to implement custom func
+- After def DAG and code deployment on Airflow
+- Use UI or CLI to check the WF exec status
+    ```bash
+    # print all active DAGs
+    $ airflow dags list
+    # Print task list in a particular dag like data_process_dag
+    $ airflow tasks list data_process_dag
+    # Print heirarchy of tasks in a particular DAg like data_process_dag
+    $ airflow tasks list data_process_dag --tree
+    ```
+### Features
+- DAGs (implemented via python lib)
+- Programmatic WF mgmt
+    - Create tasks on the fly
+    - make complex dynamic WFs
+- Many built-in Operators to reduce coding
+- Solid task dependency and execution mgmt
+    - Auto-rety policy built-in every task
+    - Provides diff sensor types to handle runtime dependencies like:
+        - detect task completion
+        - detect WF run status change
+        - check file presence
+- Extensibility
+    - Sensors, hooks, operators are fully extensible
+    - Can add cutom operators to itnegrate to diff sys
+- Monitoring and mgmt interface
+    - Powerful UI get quick overview of WF/task exec status and history
+    - User can clear/trigger tasaks/WFs from the UI
+- Prod quality
+    - Many tools ot maintain service in production env
+        - task log serching
+        - scaling
+        - alerting
+        - RESTful APIs
+### Limits
+- Steep leraning curve
+    - Need to implement tasks, operators not supported by built-in operators
+- No easy was to do local tasting of WF
+- Hard to move DL code from proto to prod
+    - extra work to convert local model to DAG
+    - cant directly go from model code to build WF DAG
+- Hi complexity to operate in Kubernetes
+    - Not straightforward to deploy and operate Airflow there
+    - Argo WF is better choice for an Orch Sys to run on here
