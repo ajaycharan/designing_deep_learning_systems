@@ -428,4 +428,88 @@ spec:
         - name: notify-ds
         ...
 ```
+Most fundamental concepts:
+- WF
+    - WF object is a single instance of WF. Contains:
+        - WF def
+        - WF exec state
+    - WF is a live object
+- template
+    - Like a func
+    - Define instructions to be exec
+    - `entrypoint`: def main function i.e. it'll be exec first
+- In code above, 4 sequential steps: check-new-data -> tfm-data -> save-into-db -> notify-ds
+    - each step can reference a template
+    - steps pass params via artifact files
+- TO submit WF: `argo submit -n argo sample_wf.yaml`
+- To review the details of WF run:
+    - Use the UI
+    - Or use argo CLI
+    ```bash
+    # list all WFs
+    $ argo list -n argo
+    # get details of a WF run
+    $ argo get -n argo {WF_NAME}
+    ```
+    - Or use Kubernetes CLI
+    ```bash
+    # list all argo customer resource defs
+    $ kubectl get crd -n argo
+    # list all WFs
+    $ kubectl get workflows -n argo
+    # check psecific WF
+    $ kubectl describe workflow/{WF_NAME} -n argo
+    ```
+Ref:
+- https://argo-workflows.readthedocs.io/en/latest/workflow-concepts/
+- https://github.com/argoproj/argo-cd/blob/master/docs/developer-guide/architecture/components.md
+
+### Code dockerization; Easy prod deployment
+Argo is basically a Kub pod (docker img) scheduling system. It does force us to  write the code in a series of docker imgs but that creates great flexibility and isolation inside the orch sys. 
+- Because the code is in a docker, it can be executed by any worker without worrrying about making the worker config different for the job
+- This also means low cost of prod deployment. We can test the code locally and then the docker img can be directly used in argo WF
+- Unlike airflow it has almost no conversion effort from proto code to prod wf
+
+### key feature
+- low cost ot install and maintain
+    - Can use Kub process to troubleshoot issues
+    - using a few `kubectl` we can easilt install it and run it
+- robust WF excution
+    - Kub pod gives great isolation for task execution
+    - Support cron WF and task retry
+- Templating and composability
+    - Argo WF templates are like functions
+    - templates can be composed together (step functions)
+    - so the commong work can be shared among teams
+- Full featured UI
+    - UI can mamage entire life cycle of a WF: submit, stop, list, view defs
+- Hi flexiblity and applicability
+    - Argo defines REST APIs to manage system and add new capabilites (plugins)
+    - WF tasks are defined as docker images
+    - So it can be used in many domains: ETL, ML, data processing, CI/CD
+- Prod quality
+    - Kubeflow pipeline and Argo CD are productinizing argo WFs
+
+### limitaitons
+- Everyone has to write and maintina YAML files
+    - The Kub CRD has to be define in a YAML file
+    - Hard to manage a long YAML file as we get more num of WFs and WF lgoic gets complex
+    - Templates do help to keep WF definition s simple but it is not intuitive for people not used to working with KUb YAML configs
+- Need Kub expertise
+    - It will be easy for expert in Kub
+    - UBt hard learning curve for a novice 
+- Task exec latency
+    - For every new task, a new kub pod needs to get launched to exec it
+    - launching adds sec/mins to every single task execution, this limits time sensitive WFs
+    - SO it inot good for real-time model prediction WF where we need model prediction requests served in millisecs SLAs
+
+## 9.3.3 Metaflow
+HUman friendly lib ofcused on MLOps. Developed at Netflix and OSed in 2019.  BUilt for:
+- automating WFs
+- also reducing human time (opeartional cost) spent in DL development
+Made 2 improvements to bridge the gap from proto to prod:
+1. Simplifies WF construction
+2. unifies WF exec experience between locacl and prod envs
+
+
 
